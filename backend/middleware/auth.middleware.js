@@ -1,93 +1,63 @@
-import mongoose from "mongoose";
+import jwt from "jsonwebtoken";
+import User from "../models/User.model.js";
 
-const newsSchema = new mongoose.Schema(
-  {
-    title: {
-      type: String,
-      required: [true, "News title is required"],
-      trim: true,
-    },
-    slug: {
-      type: String,
-      required: true,
-      unique: true,
-      lowercase: true,
-      // example: "dhaka-flood-2025-07-10"
-    },
-    content: {
-      type: String,
-      required: [true, "News content is required"],
-      // rich text editor er HTML content store hobe
-    },
-    summary: {
-      type: String,
-      default: "",
-      // short description for card/preview
-    },
-    thumbnail: {
-      public_id: { type: String, default: "" }, // cloudinary
-      url: { type: String, default: "" },
-    },
-    images: [
-      {
-        public_id: { type: String },
-        url: { type: String },
-      },
-    ], // content er moddhe multiple image
-    category: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Category",
-      required: [true, "Category is required"],
-    },
-    tags: [{ type: String, trim: true }], // ["flood", "dhaka", "2025"]
+// ── 1. Verify Token (must be logged in) ──
+export const verifyToken = async (req, res, next) => {
+  try {
+    // cookie অথবা Authorization header থেকে token নাও
+    const token =
+      req.cookies?.token ||
+      req.headers.authorization?.replace("Bearer ", "");
 
-    author: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-      // editor je likheche
-    },
-    approvedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-      // admin je approve koreche
-    },
+    if (!token) {
+      return res.status(401).json({ success: false, message: "Access denied. No token provided." });
+    }
 
-    status: {
-      type: String,
-      enum: ["draft", "pending", "published", "rejected"],
-      default: "draft",
-      // draft    → editor save koreche, submit kore ni
-      // pending  → editor submit koreche, admin approval baaki
-      // published→ admin approve koreche, live
-      // rejected → admin reject koreche
-    },
+    // token verify koro
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    isFeatured: {
-      type: Boolean,
-      default: false, // homepage hero/featured section
-    },
-    isBreaking: {
-      type: Boolean,
-      default: false, // breaking news ticker
-    },
+    // DB থেকে fresh user data নাও (deactivated user handle করতে)
+    const user = await User.findById(decoded.id);
 
-    viewCount: {
-      type: Number,
-      default: 0,
-    },
+    if (!user) {
+      return res.status(401).json({ success: false, message: "User not found." });
+    }
 
-    publishedAt: {
-      type: Date,
-      default: null, // admin approve korle set hobe
-    },
-  },
-  { timestamps: true }
-);
+    if (!user.isActive) {
+      return res.status(403).json({ success: false, message: "Your account has been deactivated." });
+    }
 
-// ── Text search index (title + content) ──
-newsSchema.index({ title: "text", content: "text", tags: "text" });
+    req.user = user; // পরের middleware/controller এ user পাবে
+    next();
+  } catch (error) {
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ success: false, message: "Token expired. Please login again." });
+    }
+    return res.status(401).json({ success: false, message: "Invalid token." });
+  }
+};
 
-const News = mongoose.model("News", newsSchema);
-export default News;
+// ── 2. Admin only ──
+export const isAdmin = (req, res, next) => {
+  if (req.user?.role !== "admin") {
+    return res.status(403).json({ success: false, message: "Access denied. Admins only." });
+  }
+  next();
+};
+
+// ── 3. Editor only ──
+export const isEditor = (req, res, next) => {
+  if (req.user?.role !== "editor") {
+    return res.status(403).json({ success: false, message: "Access denied. Editors only." });
+  }
+  next();
+};
+
+// ── 4. Editor অথবা Admin (দুইজনই access পাবে) ──
+export const isEditorOrAdmin = (req, res, next) => {
+  const role = req.user?.role;
+  if (role !== "editor" && role !== "admin") {
+    return res.status(403).json({ success: false, message: "Access denied. Editors or Admins only." });
+  }
+  next();
+};
