@@ -4,6 +4,8 @@ import {
   getAllNews,
   getNewsById,
   getNewsBySlug,
+  getMyNews,
+  getPendingNews,
   updateNews,
   deleteNews,
   submitForApproval,
@@ -19,10 +21,15 @@ import { uploadNewsImages } from "../middleware/upload.middleware.js";
 const router = express.Router();
 
 // ── Public routes ──
-router.get("/", getAllNews);                        // সব published news
-router.get("/slug/:slug", getNewsBySlug);           // slug দিয়ে news
-router.get("/:id", getNewsById);                    // id দিয়ে news
-router.patch("/:id/view", incrementView);           // view count বাড়ানো
+router.get("/", getAllNews);
+router.get("/slug/:slug", getNewsBySlug);
+router.patch("/:id/view", incrementView);
+
+// ── Auth-specific list routes (must be before /:id) ──
+router.get("/my", verifyToken, isEditorOrAdmin, getMyNews);
+router.get("/pending", verifyToken, isAdmin, getPendingNews);
+
+router.get("/:id", getNewsById);
 
 // ── Editor routes ──
 router.post("/", verifyToken, isEditor, uploadNewsImages, createNews);           // news create

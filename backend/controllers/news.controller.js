@@ -287,6 +287,40 @@ export const incrementView = async (req, res, next) => {
   }
 };
 
+// ── Get editor's own news ──
+export const getMyNews = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 10, status } = req.query;
+    const filter = { author: req.user._id };
+    if (status) filter.status = status;
+    const skip = (page - 1) * limit;
+    const [news, total] = await Promise.all([
+      News.find(filter)
+        .populate("category", "name slug")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit)),
+      News.countDocuments(filter),
+    ]);
+    res.status(200).json({ success: true, total, page: Number(page), totalPages: Math.ceil(total / limit), news });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── Get pending news (admin) ──
+export const getPendingNews = async (req, res, next) => {
+  try {
+    const news = await News.find({ status: "pending" })
+      .populate("category", "name slug")
+      .populate("author", "name avatar")
+      .sort({ createdAt: -1 });
+    res.status(200).json({ success: true, count: news.length, news });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // ── Delete news ──
 export const deleteNews = async (req, res, next) => {
   try {
