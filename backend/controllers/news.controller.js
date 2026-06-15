@@ -1,4 +1,4 @@
-import News from "../models/News.model.js";
+import News from "../models/news.model.js";
 import { v2 as cloudinary } from "cloudinary";
 import slugify from "slugify";
 
