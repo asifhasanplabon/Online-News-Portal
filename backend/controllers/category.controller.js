@@ -1,4 +1,4 @@
-import Category from "../models/Category.model.js";
+import Category from "../models/category.model.js";
 import slugify from "slugify"; // npm install slugify
 
 // ── Create category ──
